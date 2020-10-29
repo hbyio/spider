@@ -62,17 +62,22 @@ var captureCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("Error reading env : %s", err)
 		}
-		verbose, err := cmd.PersistentFlags().GetBool("verbose")
-		if err != nil {
-			log.Printf("Error getting verbose flag value : %s", err)
-		}
 		progress, err := cmd.PersistentFlags().GetBool("progress")
 		if err != nil {
 			log.Printf("Error getting progress flag value : %s", err)
 		}
-		if !verbose {
-			log.SetOutput(ioutil.Discard)
+
+		// Create (if not exists) logfile
+		logfile, err := os.OpenFile("spiderhouse.log",
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Println(err)
 		}
+		defer logfile.Close()
+		// Write logs to logfile
+		// TODO : find a way to output to file AND stdOut
+		//log.SetOutput(logfile)
+		log.SetOutput(os.Stdout)
 		// Enable line numbers in logging
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -113,7 +118,6 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	captureCmd.PersistentFlags().Bool("progress", false, "Show upload progress")
-	captureCmd.PersistentFlags().Bool("verbose", false, "Tell me what's wrong")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
