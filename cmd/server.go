@@ -34,7 +34,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		http.HandleFunc("/status", status)
-		http.ListenAndServe(":80", nil)
+		http.ListenAndServe(":8080", nil)
 	},
 }
 
