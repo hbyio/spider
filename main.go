@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "spider/cmd"
+import "github.com/hbyio/spider/cmd"
 
 func main() {
 	cmd.Execute()
