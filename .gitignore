@@ -1,2 +1,4 @@
 /.envrc
 /.idea/*
+*.log
+/backups/*

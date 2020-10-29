@@ -26,7 +26,7 @@ import (
 // explainCmd represents the explain command
 var explainCmd = &cobra.Command{
 	Use:   "explain",
-	Short: "Print env variables decriptions",
+	Short: "Print env variables descriptions",
 	Run: func(cmd *cobra.Command, args []string) {
 		help, err := cleanenv.GetDescription(&conf, nil)
 		if err != nil {
