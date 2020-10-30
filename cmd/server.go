@@ -17,6 +17,8 @@ package cmd
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/spf13/cobra"
@@ -33,7 +35,12 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		http.HandleFunc("/status", status)
+
+		//fileServer := http.FileServer(http.Dir("./static")) // New code
+		//http.Handle("/", fileServer) // New code
+		http.HandleFunc("/", status)
+
+		fmt.Printf("Starting server at http://0.0.0.0:8080 \n")
 		http.ListenAndServe(":8080", nil)
 	},
 }
@@ -54,11 +61,23 @@ func init() {
 
 func status(w http.ResponseWriter, req *http.Request) {
 
-	fmt.Fprintf(w, "hello\n")
-
-	for name, headers := range req.Header {
-		for _, h := range headers {
-			fmt.Fprintf(w, "%v: %v\n", name, h)
-		}
+	bytes, err := ioutil.ReadFile("spiderhouse.log")
+	if err != nil {
+		log.Printf("Error opening log file : %s", err)
+		w.Write([]byte(fmt.Sprintf("%s", err)))
 	}
+	w.Write(bytes)
 }
+
+//func foo(w http.ResponseWriter, r *http.Request) {
+//	profile := Profile{"Alex", []string{"snowboarding", "programming"}}
+//
+//	js, err := json.Marshal(profile)
+//	if err != nil {
+//		http.Error(w, err.Error(), http.StatusInternalServerError)
+//		return
+//	}
+//
+//	w.Header().Set("Content-Type", "application/json")
+//	w.Write(js)
+//}

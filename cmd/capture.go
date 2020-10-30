@@ -23,11 +23,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/ilyakaznacheev/cleanenv"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	pb "gopkg.in/cheggaaa/pb.v1"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -57,6 +57,7 @@ var captureCmd = &cobra.Command{
 	Short: "Capture a database dump and place it on s3",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		log.SetFormatter(&log.TextFormatter{})
 
 		err := cleanenv.ReadEnv(&conf)
 		if err != nil {
@@ -74,14 +75,9 @@ var captureCmd = &cobra.Command{
 			log.Println(err)
 		}
 		defer logfile.Close()
-		// Write logs to logfile
-		// TODO : find a way to output to file AND stdOut
-		//log.SetOutput(logfile)
-		log.SetOutput(os.Stdout)
-		// Enable line numbers in logging
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-		//log.Printf("%#v", conf)
+		// Write logs to logfile
+		log.SetOutput(io.MultiWriter(logfile, os.Stdout))
 
 		dumpFile, err := pgDump(conf.DatabaseUrl, &conf)
 		if err != nil {
@@ -306,7 +302,7 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 		if err != nil {
 			return fmt.Errorf("Could not upload to daily folder : %v", err)
 		}
-		log.Printf("Successfully uploaded %s to %s\n", filename, dailyresult.Location)
+		log.Printf("🌞 Successfully uploaded %s to %s", filename, dailyresult.Location)
 	}
 	if dayOfMonth == 1 {
 		monthlyresult, err := uploader.Upload(&s3manager.UploadInput{
@@ -317,7 +313,7 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 		if err != nil {
 			return fmt.Errorf("Could not upload to monthly folder : %v", err)
 		}
-		log.Printf("Successfully uploaded %s to %s\n", filename, monthlyresult.Location)
+		log.Printf("🌕 Successfully uploaded %s to %s", filename, monthlyresult.Location)
 	}
 
 	// pretext := "👋 Hello, backup and upload to s3 successfull, I keep going 😎 "
@@ -329,6 +325,6 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 	// attachment.Color = "#7CD197"
 	// pingSlackWithAttachment("", attachment)
 
-	log.Printf("👋 Hello, backup and upload to s3 successfull, I keep going 😎 : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
+	log.Printf("✅ Backup and upload to s3 successfull : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
 	return nil
 }
