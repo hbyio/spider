@@ -6,7 +6,8 @@ FROM golang:1.15-alpine as builder
 # Install git + SSL ca certificates.
 # Git is required for fetching the dependencies.
 # Ca-certificates is required to call HTTPS endpoints.
-RUN apk update && apk add --no-cache git ca-certificates tzdata && update-ca-certificates
+RUN apk update && apk add --no-cache git ca-certificates tzdata postgresql-client && update-ca-certificates
+
 # Create appuser
 ENV USER=appuser
 ENV UID=10001
@@ -30,6 +31,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
+COPY --from=builder /usr/bin/pg_dump /usr/bin/pg_dump
 # Copy our static executable
 COPY --from=builder /go/bin/spiderhouse /go/bin/spiderhouse
 # Use an unprivileged user.
