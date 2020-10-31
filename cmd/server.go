@@ -17,12 +17,14 @@ package cmd
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/spf13/cobra"
 )
+
+var reportfile string
 
 // serverCmd represents the server command
 var serverCmd = &cobra.Command{
@@ -35,9 +37,6 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-
-		//fileServer := http.FileServer(http.Dir("./static")) // New code
-		//http.Handle("/", fileServer) // New code
 		http.HandleFunc("/", status)
 
 		fmt.Printf("Starting server at http://0.0.0.0:8080 \n")
@@ -52,7 +51,7 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// serverCmd.PersistentFlags().String("foo", "", "A help for foo")
+	serverCmd.PersistentFlags().StringVar(&reportfile, "file", "./log/spiderhouse.log", "Serve file with report infos")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -60,8 +59,7 @@ func init() {
 }
 
 func status(w http.ResponseWriter, req *http.Request) {
-
-	bytes, err := ioutil.ReadFile("spiderhouse.log")
+	bytes, err := ioutil.ReadFile(reportfile)
 	if err != nil {
 		log.Printf("Error opening log file : %s", err)
 		w.Write([]byte(fmt.Sprintf("%s", err)))
