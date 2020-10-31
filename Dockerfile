@@ -34,6 +34,17 @@ COPY --from=builder /etc/group /etc/group
 COPY --from=builder /usr/bin/pg_dump /usr/bin/pg_dump
 # Copy our static executable
 COPY --from=builder /go/bin/spiderhouse /go/bin/spiderhouse
+
+
+RUN touch /var/log/spiderhouse.log
+RUN chown appuser:appuser /var/log/spiderhouse.log
+RUN chmod 766  /var/log/spiderhouse.log
+
+RUN touch /etc/periodic/15min/gospider
+RUN chmod a+x /etc/periodic/15min/gospider
+RUN echo '#!/bin/sh' >> /etc/periodic/15min/gospider
+RUN echo '/go/bin/spiderhouse capture >> /var/log/spiderhouse.log' >> /etc/periodic/15min/gospider
+
 # Use an unprivileged user.
 USER appuser:appuser
 # Port on which the service will be exposed. Expose on port > 1024

@@ -23,11 +23,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/ilyakaznacheev/cleanenv"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	pb "gopkg.in/cheggaaa/pb.v1"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -37,18 +37,18 @@ import (
 )
 
 var conf Configuration
+var AwsPrefix string
+var debug bool
 
 type Configuration struct {
-	BackupDirPath      string `env:"BACKUP_DIR" env-default:"backups" env-description:"Where to temporary save backups before uploading to s3"`
+	TempBackupDir      string
 	DatabaseUrl        string `env:"DATABASE_URL" env-default:"postgres://root:password@127.0.0.1:5432/devdb" env-description:"Source database url to pull backup from" env-required`
 	SlackWebHook       string `env:"SLACK_WEBHOOK" env-description:"Slack webhook to report informations"`
 	AwsBucket          string `env:"AWS_BUCKET" env-description:"Aws bucket to store dump files" env-required`
 	AwsRegion          string `env:"AWS_REGION" env-description:"Aws bucket region" env-required`
 	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID" env-description:"Aws access key id"`
 	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY" env-description:"Aws secret access key"`
-	BackupDirHourly    string `env:"PREFIX_HOURLY" env-default:"hourly" env-description:"Prefix on your bucket where to store hourly backups"`
-	BackupDirDaily     string `env:"PREFIX_DAILY" env-default:"daily" env-description:"Prefix on your bucket where to store daily backups"`
-	BackupDirMonthly   string `env:"PREFIX_MONTHLY" env-default:"monthly" env-description:"Prefix on your bucket where to store monthly backups"`
+	AwsPrefix          string `env:"AWS_PREFIX" env-default:"backup" env-description:"Prefix on your bucket where to store backup"`
 }
 
 // captureCmd represents the capture command
@@ -57,8 +57,7 @@ var captureCmd = &cobra.Command{
 	Short: "Capture a database dump and place it on s3",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.SetFormatter(&log.TextFormatter{})
-
+		log.Printf("======================= Start backup =======================")
 		err := cleanenv.ReadEnv(&conf)
 		if err != nil {
 			return fmt.Errorf("Error reading env : %s", err)
@@ -68,21 +67,25 @@ var captureCmd = &cobra.Command{
 			log.Printf("Error getting progress flag value : %s", err)
 		}
 
-		// Create (if not exists) logfile
-		logfile, err := os.OpenFile("spiderhouse.log",
-			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Println(err)
+		// If flag is set it overrides conf file or env
+		if AwsPrefix != "" {
+			conf.AwsPrefix = AwsPrefix
 		}
-		defer logfile.Close()
 
-		// Write logs to logfile
-		log.SetOutput(io.MultiWriter(logfile, os.Stdout))
+		// Generate temp dir
+		conf.TempBackupDir, err = ioutil.TempDir("", "spiderhouse")
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Temp dir is : %s", conf.TempBackupDir)
+		defer os.RemoveAll(conf.TempBackupDir)
 
+		// Dump file from DATABASE_URL
 		dumpFile, err := pgDump(conf.DatabaseUrl, &conf)
 		if err != nil {
 			return fmt.Errorf("Dump error : %s", err)
 		}
+
 		if dumpFile != "" {
 
 			err = uploadTos3(dumpFile, &conf, progress)
@@ -90,18 +93,18 @@ var captureCmd = &cobra.Command{
 				log.Printf("Error during upload : %s", err)
 			}
 
-			err = os.RemoveAll(conf.BackupDirPath)
+			err = os.RemoveAll(conf.TempBackupDir)
 			if err != nil {
 				log.Printf("Could not remove backup file %v : %v", dumpFile, err)
 			}
-			if _, err := os.Stat(conf.BackupDirPath); os.IsNotExist(err) {
-				log.Printf("%s successfully removed", conf.BackupDirPath)
+			if _, err := os.Stat(conf.TempBackupDir); os.IsNotExist(err) {
+				log.Printf("%s successfully removed", conf.TempBackupDir)
 			} else {
-				log.Printf("%s was not removed", conf.BackupDirPath)
+				log.Printf("%s was not removed", conf.TempBackupDir)
 			}
 
 		}
-
+		log.Printf("======================= End backup =======================")
 		return nil
 	},
 }
@@ -114,6 +117,8 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	captureCmd.PersistentFlags().Bool("progress", false, "Show upload progress")
+	captureCmd.PersistentFlags().StringVarP(&AwsPrefix, "prefix", "p", "backups", "Aws Prefix")
+	captureCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Log informations for debugging, do not use in production")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -178,11 +183,11 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 	}
 
 	// Create backups directory if not exists
-	_ = os.Mkdir(conf.BackupDirPath, 0700)
+	_ = os.Mkdir(conf.TempBackupDir, 0700)
 
 	// Create backup file
 	filename := fmt.Sprintf(`production-backup-%v.dump`, time.Now().Local().Format("2006-01-02-150405"))
-	filepath := filepath.Join(conf.BackupDirPath, filename)
+	filepath := filepath.Join(conf.TempBackupDir, filename)
 	tmpfile, err := os.Create(filepath + ".partial")
 	if err != nil {
 		return "", errors.New("Could not create tmp dump file")
@@ -208,7 +213,7 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 	// Start Command and proceed without wainting for it to complete
 	err = cmd.Start()
 	start := time.Now()
-	log.Printf("Start backup %v from %v to %v", filename, u.Host, conf.BackupDirPath)
+	log.Printf("Start backup %v from %v to %v", filename, u.Host, conf.TempBackupDir)
 
 	go io.Copy(writer, stdoutPipe)
 
@@ -235,7 +240,7 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 
 func uploadTos3(filename string, conf *Configuration, progress bool) error {
 
-	dumpfile, err := os.Open(filepath.Join(conf.BackupDirPath, filename))
+	dumpfile, err := os.Open(filepath.Join(conf.TempBackupDir, filename))
 	if err != nil {
 		return fmt.Errorf("Failed to open file", filename, err)
 	}
@@ -273,13 +278,13 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 		u.LeavePartsOnError = true
 	})
 
-	log.Printf("Uploading %v to %v...", filename, filepath.Join(conf.AwsBucket, conf.BackupDirHourly, filename))
+	log.Printf("Uploading %v to %v...", filename, filepath.Join(conf.AwsBucket, conf.AwsPrefix, filename))
 	if progress {
 		bar.Start()
 	}
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(conf.AwsBucket),
-		Key:    aws.String(filepath.Join(conf.BackupDirHourly, filename)),
+		Key:    aws.String(filepath.Join(conf.AwsPrefix, filename)),
 		Body:   reader,
 	})
 	if err != nil {
@@ -289,31 +294,10 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 		bar.Finish()
 	}
 
-	log.Printf("Successfully uploaded %s to %s\n", filename, result.Location)
-
-	dayOfMonth := time.Now().Day()
-	hourOfDay := time.Now().Hour()
-	if hourOfDay == 6 {
-		dailyresult, err := uploader.Upload(&s3manager.UploadInput{
-			Bucket: aws.String(conf.AwsBucket),
-			Key:    aws.String(filepath.Join(conf.BackupDirDaily, filename)),
-			Body:   reader,
-		})
-		if err != nil {
-			return fmt.Errorf("Could not upload to daily folder : %v", err)
-		}
-		log.Printf("🌞 Successfully uploaded %s to %s", filename, dailyresult.Location)
-	}
-	if dayOfMonth == 1 {
-		monthlyresult, err := uploader.Upload(&s3manager.UploadInput{
-			Bucket: aws.String(conf.AwsBucket),
-			Key:    aws.String(filepath.Join(conf.BackupDirMonthly, filename)),
-			Body:   reader,
-		})
-		if err != nil {
-			return fmt.Errorf("Could not upload to monthly folder : %v", err)
-		}
-		log.Printf("🌕 Successfully uploaded %s to %s", filename, monthlyresult.Location)
+	if debug {
+		log.Printf("Successfully uploaded %s to %s\n", filename, result.Location)
+	} else {
+		log.Printf("Successfully uploaded %s to %s\n", filename, conf.AwsPrefix)
 	}
 
 	// pretext := "👋 Hello, backup and upload to s3 successfull, I keep going 😎 "
@@ -325,6 +309,6 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 	// attachment.Color = "#7CD197"
 	// pingSlackWithAttachment("", attachment)
 
-	log.Printf("✅ Backup and upload to s3 successfull : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
+	log.Printf("✅  Backup and upload to s3 successfull : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
 	return nil
 }
