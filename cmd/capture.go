@@ -57,7 +57,7 @@ var captureCmd = &cobra.Command{
 	Short: "Capture a database dump and place it on s3",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
-
+		log.SetOutput(os.Stdout)
 		err := cleanenv.ReadEnv(&conf)
 		if err != nil {
 			return err
