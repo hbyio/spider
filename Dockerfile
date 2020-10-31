@@ -27,9 +27,9 @@ RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/spiderhouse
 ############################
 FROM alpine:latest
 # Import from builder.
-
+USER root
 # Install pg_dump
-RUN apk update && apk add postgresql-client
+RUN apk update && apk add --no-cache postgresql-client openrc busybox-initscripts
 
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
@@ -39,19 +39,34 @@ COPY --from=builder /etc/group /etc/group
 # Copy our static executable
 COPY --from=builder /go/bin/spiderhouse /go/bin/spiderhouse
 
-
+# Add log file
 RUN touch /var/log/spiderhouse.log
 RUN chown appuser:appuser /var/log/spiderhouse.log
 RUN chmod 766  /var/log/spiderhouse.log
 
-RUN touch /etc/periodic/15min/gospider
-RUN chmod a+x /etc/periodic/15min/gospider
-RUN echo '#!/bin/sh' >> /etc/periodic/15min/gospider
-RUN echo '/go/bin/spiderhouse capture >> /var/log/spiderhouse.log' >> /etc/periodic/15min/gospider
+# Empty crontab first
+RUN cat /dev/null | crontab -
 
-# Use an unprivileged user.
-USER appuser:appuser
+# Add cron jobs
+RUN (echo " */1 * * * *  echo \"run for your life\" >> /var/log/spiderhouse.log") | crontab -
+RUN (crontab -l ; echo " 0 * * * *  /go/bin/spiderhouse capture --prefix=hourly >> /var/log/spiderhouse.log") | crontab -
+RUN (crontab -l ; echo " 0 6 * * *  /go/bin/spiderhouse capture --prefix=daily >> /var/log/spiderhouse.log") | crontab -
+RUN (crontab -l ; echo " 0 8 1 * *  /go/bin/spiderhouse capture --prefix=monthly >> /var/log/spiderhouse.log") | crontab -
+                       # * * * * *  command to execute
+                       # │ │ │ │ │
+                       # │ │ │ │ │
+                       # │ │ │ │ └───── day of week (0 - 6) (0 to 6 are Sunday to Saturday, or use names; 7 is Sunday, the same as 0)
+                       # │ │ │ └────────── month (1 - 12)
+                       # │ │ └─────────────── day of month (1 - 31)
+                       # │ └──────────────────── hour (0 - 23)
+                       # └───────────────────────── min (0 - 59)
+
+# Use an unprivileged user
+# Todo : impossible at the moment because cron needs root BUT find a way
+# USER appuser:appuser
+
 # Port on which the service will be exposed. Expose on port > 1024
 EXPOSE 8080
+
 # Run the spiderhouse binary.
-ENTRYPOINT ["/go/bin/spiderhouse", "server"]
+ENTRYPOINT ["crond","-l","2","-f"]
