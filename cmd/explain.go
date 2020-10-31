@@ -34,7 +34,7 @@ var explainCmd = &cobra.Command{
 				log.Printf("Error getting description : %s", err)
 			}
 		}
-		fmt.Print(help)
+		fmt.Println(help)
 	},
 }
 

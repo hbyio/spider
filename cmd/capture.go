@@ -42,12 +42,12 @@ var debug bool
 
 type Configuration struct {
 	TempBackupDir      string
-	DatabaseUrl        string `env:"DATABASE_URL" env-default:"postgres://root:password@127.0.0.1:5432/devdb" env-description:"Source database url to pull backup from" env-required`
+	DatabaseUrl        string `env:"DATABASE_URL" env-required:"true" env-description:"Source database url to pull backup from (e.g. postgres://root:password@127.0.0.1:5432/devdb)"`
 	SlackWebHook       string `env:"SLACK_WEBHOOK" env-description:"Slack webhook to report informations"`
-	AwsBucket          string `env:"AWS_BUCKET" env-description:"Aws bucket to store dump files" env-required`
-	AwsRegion          string `env:"AWS_REGION" env-description:"Aws bucket region" env-required`
-	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID" env-description:"Aws access key id"`
-	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY" env-description:"Aws secret access key"`
+	AwsBucket          string `env:"AWS_BUCKET" env-required:"true" env-description:"Aws bucket to store dump files"`
+	AwsRegion          string `env:"AWS_REGION" env-required:"true" env-description:"Aws bucket region"`
+	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID" env-required:"true" env-description:"Aws access key id"`
+	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY" env-required:"true" env-description:"Aws secret access key"`
 	AwsPrefix          string `env:"AWS_PREFIX" env-default:"backup" env-description:"Prefix on your bucket where to store backup"`
 }
 
@@ -57,10 +57,10 @@ var captureCmd = &cobra.Command{
 	Short: "Capture a database dump and place it on s3",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Printf("======================= Start backup =======================")
+
 		err := cleanenv.ReadEnv(&conf)
 		if err != nil {
-			return fmt.Errorf("Error reading env : %s", err)
+			return err
 		}
 		progress, err := cmd.PersistentFlags().GetBool("progress")
 		if err != nil {
@@ -72,6 +72,7 @@ var captureCmd = &cobra.Command{
 			conf.AwsPrefix = AwsPrefix
 		}
 
+		log.Printf("======================= Start backup =======================")
 		// Generate temp dir
 		conf.TempBackupDir, err = ioutil.TempDir("", "spiderhouse")
 		if err != nil {
@@ -83,7 +84,7 @@ var captureCmd = &cobra.Command{
 		// Dump file from DATABASE_URL
 		dumpFile, err := pgDump(conf.DatabaseUrl, &conf)
 		if err != nil {
-			return fmt.Errorf("Dump error : %s", err)
+			return errors.New(fmt.Sprintf("Dump error : %s", err))
 		}
 
 		if dumpFile != "" {

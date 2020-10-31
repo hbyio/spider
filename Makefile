@@ -1,11 +1,15 @@
-dokbuild:
+build:
 	docker build --rm -t spiderhouse:latest .
 
-dokrun:
-	docker run --publish 8080:8080 --name spiderhouse --rm spiderhouse
+run:
+	docker run --env-file .env --publish 8080:8080 --name spiderhouse --rm spiderhouse
 
-dokclean:
+clean:
 	docker image prune -f
 
-dokexec:
-	docker exec -it --user root:root spiderhouse /bin/sh
+exec:
+	#docker exec -it --user root:root spiderhouse /bin/sh
+	docker exec -it spiderhouse /bin/sh
+
+# Test commands for cron jobs in Alpine
+# run-parts /etc/periodic/15min/

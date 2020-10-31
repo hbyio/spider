@@ -16,20 +16,20 @@ limitations under the License.
 package cmd
 
 import (
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"os"
-
 	homedir "github.com/mitchellh/go-homedir"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"log"
+	"os"
 )
 
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "spiderhouse",
-	Short: "Spiders catch your dumps from database_url and store them on their s3 house",
+	Use:          "spiderhouse",
+	Short:        "Spider catch your dump from database_url and store it in its aws bucket house",
+	SilenceUsage: true,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
@@ -39,7 +39,6 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Println(err)
 		os.Exit(1)
 	}
 }
