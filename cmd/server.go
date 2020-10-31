@@ -51,7 +51,7 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	serverCmd.PersistentFlags().StringVar(&reportfile, "file", "./log/spiderhouse.log", "Serve file with report infos")
+	serverCmd.PersistentFlags().StringVar(&reportfile, "file", "/var/log/spiderhouse.log", "Serve file with report infos")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

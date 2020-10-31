@@ -8,8 +8,10 @@ clean:
 	docker image prune -f
 
 exec:
-	#docker exec -it --user root:root spiderhouse /bin/sh
 	docker exec -it spiderhouse /bin/sh
+
+execroot:
+	docker exec -it --user root:root spiderhouse /bin/sh
 
 # Test commands for cron jobs in Alpine
 # run-parts /etc/periodic/15min/
