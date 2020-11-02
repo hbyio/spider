@@ -1,1 +1,1 @@
-release: bin/spiderhouse version
+web: bin/spiderhouse version
