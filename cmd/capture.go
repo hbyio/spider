@@ -187,7 +187,11 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 	_ = os.Mkdir(conf.TempBackupDir, 0700)
 
 	// Create backup file
-	filename := fmt.Sprintf(`production-backup-%v.dump`, time.Now().Local().Format("2006-01-02-150405"))
+	location, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		return "", err
+	}
+	filename := fmt.Sprintf(`production-backup-%v.dump`, time.Now().In(location).Format("2006-01-02-150405"))
 	filepath := filepath.Join(conf.TempBackupDir, filename)
 	tmpfile, err := os.Create(filepath + ".partial")
 	if err != nil {
