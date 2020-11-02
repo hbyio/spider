@@ -68,5 +68,5 @@ RUN (crontab -l ; echo " 0 8 1 * *  /go/bin/spiderhouse capture --prefix=monthly
 # Port on which the service will be exposed. Expose on port > 1024
 EXPOSE 8080
 
-# Run the spiderhouse binary.
-ENTRYPOINT ["crond","-l","2","-f"]
+# Run the spiderhouse cron.
+CMD ["crond", "-f", "-d", "8"]
