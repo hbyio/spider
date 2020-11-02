@@ -28,7 +28,7 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:          "spiderhouse",
-	Short:        "Spider catch your dump from database_url and store it in its aws bucket house",
+	Short:        "Spiderhouse catch your dump from database_url and store it in its aws bucket house",
 	SilenceUsage: true,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
@@ -70,9 +70,9 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".spider" (without extension).
+		// Search config in home directory with name ".spiderhouse" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".spider")
+		viper.SetConfigName(".spiderhouse")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

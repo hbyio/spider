@@ -1,4 +1,4 @@
-module github.com/hbyio/spider
+module github.com/hbyio/spiderhouse
 
 // +heroku goVersion go1.15
 go 1.15

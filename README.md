@@ -16,7 +16,7 @@ go install
 ## Usage
 
 ```shell
-Spiders catch your dumps from database_url and store them on their s3 house
+Spiderhouse catch your dumps from database_url and store them on their s3 house
 
 Usage:
   spiderhouse [command]
