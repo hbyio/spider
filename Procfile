@@ -1,1 +1,1 @@
-release: /app/bin/spiderhouse version
+release: bin/spiderhouse version
