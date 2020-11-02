@@ -1,0 +1,1 @@
+release: /app/bin/spiderhouse version
