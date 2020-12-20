@@ -48,7 +48,7 @@ type Configuration struct {
 	AwsRegion          string `env:"AWS_REGION" env-required:"true" env-description:"Aws bucket region"`
 	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID" env-required:"true" env-description:"Aws access key id"`
 	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY" env-required:"true" env-description:"Aws secret access key"`
-	AwsPrefix          string `env:"AWS_PREFIX" env-default:"backup" env-description:"Prefix on your bucket where to store backup"`
+	AwsPrefix          string `env:"AWS_PREFIX" env-description:"Prefix on your bucket where to store backup"`
 }
 
 // captureCmd represents the capture command
