@@ -73,6 +73,8 @@ var captureCmd = &cobra.Command{
 		}
 
 		log.Printf("======================= Start backup =======================")
+		// Spiderhouse version performing backup
+		log.Printf("Spiderhouse %s", version)
 		// Generate temp dir
 		conf.TempBackupDir, err = ioutil.TempDir("", "spiderhouse")
 		if err != nil {
