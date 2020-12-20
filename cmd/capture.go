@@ -118,7 +118,7 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	captureCmd.PersistentFlags().Bool("progress", false, "Show upload progress")
-	captureCmd.PersistentFlags().StringVarP(&AwsPrefix, "prefix", "p", "backups", "Aws Prefix")
+	captureCmd.PersistentFlags().StringVarP(&AwsPrefix, "prefix", "p", "", "Aws Prefix")
 	captureCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Log informations for debugging, do not use in production")
 
 	// Cobra supports local flags which will only run when this command
