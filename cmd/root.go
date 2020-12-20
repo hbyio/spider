@@ -16,14 +16,18 @@ limitations under the License.
 package cmd
 
 import (
+	"flag"
 	homedir "github.com/mitchellh/go-homedir"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"log"
 	"os"
+	"time"
 )
 
 var cfgFile string
+var debug bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -32,7 +36,29 @@ var rootCmd = &cobra.Command{
 	SilenceUsage: true,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+
+		zerolog.TimestampFunc = func() time.Time {
+			loc, err := time.LoadLocation("Europe/paris")
+			if err != nil {
+				panic(err)
+			}
+			return time.Now().In(loc)
+		}
+		debug := flag.Bool("debug", false, "sets log level to debug")
+		flag.Parse()
+		// Default level for this example is info, unless debug flag is present
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		if *debug {
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
+
+
+		log.Logger = zerolog.New(os.Stderr).With().Caller().Timestamp().Logger()
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -51,10 +77,10 @@ func init() {
 	// will be global for your application.
 
 	//rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.spiderhouse.yaml)")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Print debug informations")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -66,8 +92,7 @@ func initConfig() {
 		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
-			log.Println(err)
-			os.Exit(1)
+			log.Error().Msgf("%s", err)
 		}
 
 		// Search config in home directory with name ".spiderhouse" (without extension).
@@ -79,6 +104,14 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		log.Println("Using config file:", viper.ConfigFileUsed())
+		log.Printf("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func timeNow(name string) time.Time {
+	loc, err := time.LoadLocation("Europe/paris")
+	if err != nil {
+		panic(err)
+	}
+	return time.Now().In(loc)
 }

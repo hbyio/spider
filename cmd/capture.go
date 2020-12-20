@@ -27,7 +27,7 @@ import (
 	pb "gopkg.in/cheggaaa/pb.v1"
 	"io"
 	"io/ioutil"
-	"log"
+	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -38,7 +38,7 @@ import (
 
 var conf Configuration
 var AwsPrefix string
-var debug bool
+
 
 type Configuration struct {
 	TempBackupDir      string
@@ -56,15 +56,18 @@ var captureCmd = &cobra.Command{
 	Use:   "capture",
 	Short: "Capture a database dump and place it on s3",
 	Long:  ``,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		log.SetOutput(os.Stdout)
+	Run: func(cmd *cobra.Command, args []string) {
+		// todo : set log to Europe/Paris DST time (juste like snapshot)
+		// todo : log error log to slack
+		// todo : version vendors
+
 		err := cleanenv.ReadEnv(&conf)
 		if err != nil {
-			return err
+			log.Err(err).Msg("error reading env")
 		}
 		progress, err := cmd.PersistentFlags().GetBool("progress")
 		if err != nil {
-			log.Printf("Error getting progress flag value : %s", err)
+			log.Err(err).Msg("error getting progress flag")
 		}
 
 		// If flag is set it overrides conf file or env
@@ -72,58 +75,43 @@ var captureCmd = &cobra.Command{
 			conf.AwsPrefix = AwsPrefix
 		}
 
-		log.Printf("======================= Start backup =======================")
+		log.Info().Msg("======================= Start backup =======================")
 		// Generate temp dir
 		conf.TempBackupDir, err = ioutil.TempDir("", "spiderhouse")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("error creating temp dir")
 		}
-		log.Printf("Temp dir is : %s", conf.TempBackupDir)
+		log.Info().Msgf("Temp dir is : %s", conf.TempBackupDir)
 		defer os.RemoveAll(conf.TempBackupDir)
 
 		// Dump file from DATABASE_URL
 		dumpFile, err := pgDump(conf.DatabaseUrl, &conf)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Dump error : %s", err))
+			log.Fatal().Err(err).Msg("dump error")
 		}
 
 		if dumpFile != "" {
 
 			err = uploadTos3(dumpFile, &conf, progress)
 			if err != nil {
-				log.Printf("Error during upload : %s", err)
+				log.Fatal().Err(err).Msg("upload error")
 			}
+		}
+		log.Info().Msg("======================= End backup =======================")
 
+		defer func() {
 			err = os.RemoveAll(conf.TempBackupDir)
 			if err != nil {
-				log.Printf("Could not remove backup file %v : %v", dumpFile, err)
+				log.Info().Msgf(" : %s", err)
 			}
-			if _, err := os.Stat(conf.TempBackupDir); os.IsNotExist(err) {
-				log.Printf("%s successfully removed", conf.TempBackupDir)
-			} else {
-				log.Printf("%s was not removed", conf.TempBackupDir)
-			}
-
-		}
-		log.Printf("======================= End backup =======================")
-		return nil
+		}()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(captureCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
 	captureCmd.PersistentFlags().Bool("progress", false, "Show upload progress")
 	captureCmd.PersistentFlags().StringVarP(&AwsPrefix, "prefix", "p", "backups", "Aws Prefix")
-	captureCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Log informations for debugging, do not use in production")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// captureCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 type customReader struct {
@@ -156,20 +144,22 @@ func (r *customReader) Seek(offset int64, whence int) (int64, error) {
 	return r.fp.Seek(offset, whence)
 }
 
-func ensurepath(command string) string {
-	_, LookErr := exec.LookPath(command)
-	if LookErr != nil {
-		log.Fatalf("%v is not found", command)
-		panic(LookErr)
+func ensurepath(command string) (string, error) {
+	_, err := exec.LookPath(command)
+	if err != nil {
+		return "", err
 	}
-	//log.Printf("command '%v' found at %v", command, ensuredcommand)
-	return command
+
+	return command, nil
 }
 
 func pgDump(PgURL string, conf *Configuration) (string, error) {
 
 	// Ensure pg_dump  is present
-	PGDumpCmd := ensurepath("pg_dump")
+	PGDumpCmd, err := ensurepath("pg_dump")
+	if err != nil {
+		return "", err
+	}
 
 	var connectionOptions []string
 	connectionOptions = append(connectionOptions, "-Fc", PgURL)
@@ -195,7 +185,7 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 	filepath := filepath.Join(conf.TempBackupDir, filename)
 	tmpfile, err := os.Create(filepath + ".partial")
 	if err != nil {
-		return "", errors.New("Could not create tmp dump file")
+		return "", errors.New(fmt.Sprintf("could not create tmp dump file %s", err))
 	}
 	defer func() {
 		tmpfile.Close()
@@ -215,16 +205,22 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 		return "", err
 	}
 
-	// Start Command and proceed without wainting for it to complete
+	// Start Command and proceed without waiting for it to complete
 	err = cmd.Start()
+	if err != nil {
+		return "", err
+	}
 	start := time.Now()
-	log.Printf("Start backup %v from %v to %v", filename, u.Host, conf.TempBackupDir)
+	log.Info().Msgf("Start backup %v from %v to %v", filename, u.Host, conf.TempBackupDir)
 
 	go io.Copy(writer, stdoutPipe)
 
-	pgDumpErr, _ := ioutil.ReadAll(stderr)
+	pgDumpErr, err := ioutil.ReadAll(stderr)
+	if err != nil {
+		return "", err
+	}
 	if len(pgDumpErr) > 0 {
-		log.Printf("%s", pgDumpErr)
+		return "", errors.New(fmt.Sprintf("%s",pgDumpErr))
 	}
 
 	// Here we wait for the command to complete
@@ -234,7 +230,7 @@ func pgDump(PgURL string, conf *Configuration) (string, error) {
 	}
 
 	elapsed := time.Since(start)
-	log.Printf("Backup of %v completed in %s", filename, elapsed)
+	log.Info().Msgf("Backup of %v completed in %s", filename, elapsed)
 
 	err = os.Rename(filepath+".partial", filepath)
 	if err != nil {
@@ -275,7 +271,7 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 
 	sess, err := session.NewSession(&awsconf)
 	if err != nil {
-		log.Printf("Error getting new session : %s", err)
+		log.Info().Msgf("Error getting new session : %s", err)
 	}
 
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
@@ -283,7 +279,7 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 		u.LeavePartsOnError = true
 	})
 
-	log.Printf("Uploading %v to %v...", filename, filepath.Join(conf.AwsBucket, conf.AwsPrefix, filename))
+	log.Info().Msgf("Uploading %v to %v...", filename, filepath.Join(conf.AwsBucket, conf.AwsPrefix, filename))
 	if progress {
 		bar.Start()
 	}
@@ -300,9 +296,9 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 	}
 
 	if debug {
-		log.Printf("Successfully uploaded %s to %s\n", filename, result.Location)
+		log.Info().Msgf("Successfully uploaded %s to %s\n", filename, result.Location)
 	} else {
-		log.Printf("Successfully uploaded %s to %s\n", filename, conf.AwsPrefix)
+		log.Info().Msgf("Successfully uploaded %s to %s\n", filename, conf.AwsPrefix)
 	}
 
 	// pretext := "👋 Hello, backup and upload to s3 successfull, I keep going 😎 "
@@ -314,6 +310,6 @@ func uploadTos3(filename string, conf *Configuration, progress bool) error {
 	// attachment.Color = "#7CD197"
 	// pingSlackWithAttachment("", attachment)
 
-	log.Printf("✅  Backup and upload to s3 successfull : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
+	log.Info().Msgf("✅  Backup and upload to s3 successfull : %s, %s", filename, fmt.Sprintf("Size : %d", dumpFileInfo.Size()))
 	return nil
 }
